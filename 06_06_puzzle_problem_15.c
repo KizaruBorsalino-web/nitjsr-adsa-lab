@@ -1,134 +1,167 @@
-import heapq
-import copy
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
 
-# Size of the puzzle
-N = 4
-GOAL_STATE = [1, 2, 3, 4,
-              5, 6, 7, 8,
-              9,10,11,12,
-              13,14,15,0]  # 0 represents the blank space
+#define N 4
+#define MAX_STATE 3628800  // upper bound (not exact) for visited states
 
-# Directions for movement
-ROW = [-1, 1, 0, 0]  # up, down
-COL = [0, 0, -1, 1]  # left, right
+// Goal state
+int GOAL_STATE[N * N] = {
+    1, 2, 3, 4,
+    5, 6, 7, 8,
+    9,10,11,12,
+    13,14,15,0
+};
 
-# Heuristic: Manhattan distance
-def manhattan_distance(state):
-    distance = 0
-    for i in range(N * N):
-        if state[i] == 0:
-            continue
-        goal_pos = state[i] - 1
-        curr_row, curr_col = i // N, i % N
-        goal_row, goal_col = goal_pos // N, goal_pos % N
-        distance += abs(curr_row - goal_row) + abs(curr_col - goal_col)
-    return distance
+// Directions for movement (up, down, left, right)
+int ROW[4] = {-1, 1, 0, 0};
+int COL[4] = {0, 0, -1, 1};
 
-# Node representation for priority queue
-class Node:
-    def __init__(self, state, parent=None, g=0):
-        self.state = state
-        self.parent = parent
-        self.g = g  # Cost to reach this node
-        self.h = manhattan_distance(state)
-        self.f = self.g + self.h
+typedef struct Node {
+    int state[N * N];
+    int g, h, f;
+    struct Node *parent;
+} Node;
 
-    def __lt__(self, other):  # Needed for heapq
-        return self.f < other.f
+// Min-heap node comparison
+int compare_nodes(const void *a, const void *b) {
+    Node *n1 = *(Node **)a;
+    Node *n2 = *(Node **)b;
+    return n1->f - n2->f;
+}
 
-def get_neighbors(state):
-    neighbors = []
-    zero_index = state.index(0)
-    x, y = zero_index // N, zero_index % N
+// Manhattan distance heuristic
+int manhattan_distance(int state[]) {
+    int distance = 0;
+    for (int i = 0; i < N * N; i++) {
+        if (state[i] == 0) continue;
+        int goal_pos = state[i] - 1;
+        int curr_row = i / N, curr_col = i % N;
+        int goal_row = goal_pos / N, goal_col = goal_pos % N;
+        distance += abs(curr_row - goal_row) + abs(curr_col - goal_col);
+    }
+    return distance;
+}
 
-    for i in range(4):
-        new_x = x + ROW[i]
-        new_y = y + COL[i]
+// Check if two states are equal
+int equal_state(int a[], int b[]) {
+    for (int i = 0; i < N * N; i++)
+        if (a[i] != b[i]) return 0;
+    return 1;
+}
 
-        if 0 <= new_x < N and 0 <= new_y < N:
-            new_index = new_x * N + new_y
-            new_state = state[:]
-            # Swap 0 with the target tile
-            new_state[zero_index], new_state[new_index] = new_state[new_index], new_state[zero_index]
-            neighbors.append(new_state)
+// Get neighbors (possible moves)
+int get_neighbors(int state[][N * N]) {
+    int zero_index = -1;
+    for (int i = 0; i < N * N; i++)
+        if (state[0][i] == 0) { zero_index = i; break; }
 
-    return neighbors
+    int x = zero_index / N;
+    int y = zero_index % N;
+    int count = 0;
 
-# Reconstruct the path from goal to start
-def reconstruct_path(node):
-    path = []
-    while node:
-        path.append(node.state)
-        node = node.parent
-    return path[::-1]  # Reverse the path
+    for (int i = 0; i < 4; i++) {
+        int new_x = x + ROW[i];
+        int new_y = y + COL[i];
+        if (new_x >= 0 && new_x < N && new_y >= 0 && new_y < N) {
+            memcpy(state[count + 1], state[0], sizeof(int) * N * N);
+            int new_index = new_x * N + new_y;
+            int tmp = state[count + 1][zero_index];
+            state[count + 1][zero_index] = state[count + 1][new_index];
+            state[count + 1][new_index] = tmp;
+            count++;
+        }
+    }
+    return count;
+}
 
-def is_solvable(puzzle):
-    """
-    Check if a 15-puzzle is solvable.
-    """
-    inv_count = 0
-    puzzle = [x for x in puzzle if x != 0]
-    for i in range(len(puzzle)):
-        for j in range(i + 1, len(puzzle)):
-            if puzzle[i] > puzzle[j]:
-                inv_count += 1
+// Print puzzle state
+void print_board(int state[]) {
+    for (int i = 0; i < N * N; i++) {
+        if (i % N == 0) printf("\n");
+        if (state[i] == 0) printf(" . ");
+        else printf("%2d ", state[i]);
+    }
+    printf("\n\n");
+}
 
-    # Blank row counting from bottom (0-based index from bottom)
-    blank_row = 3 - (puzzle.index(0) // 4)
+// Reconstruct and print solution path
+void reconstruct_path(Node *node) {
+    if (node == NULL) return;
+    reconstruct_path(node->parent);
+    print_board(node->state);
+}
 
-    # If grid width is odd, return true if inversion count is even.
-    if N % 2 != 0:
-        return inv_count % 2 == 0
-    else:
-        # If grid width is even, return true if:
-        # the blank is on an even row counting from bottom and inv_count is odd
-        # OR the blank is on an odd row from bottom and inv_count is even
-        return (blank_row % 2 == 0) == (inv_count % 2 != 0)
+// A* solver
+void solve_15_puzzle(int start[]) {
+    Node *open[100000]; // Priority queue
+    int open_size = 0;
+    Node *visited[MAX_STATE];
+    int visited_size = 0;
 
-def solve_15_puzzle(start_state):
-    if not is_solvable(start_state):
-        print("This puzzle is not solvable.")
-        return []
+    Node *root = (Node *)malloc(sizeof(Node));
+    memcpy(root->state, start, sizeof(int) * N * N);
+    root->parent = NULL;
+    root->g = 0;
+    root->h = manhattan_distance(root->state);
+    root->f = root->g + root->h;
+    open[open_size++] = root;
 
-    visited = set()
-    pq = []
-    root = Node(start_state)
-    heapq.heappush(pq, root)
+    while (open_size > 0) {
+        qsort(open, open_size, sizeof(Node *), compare_nodes);
+        Node *current = open[0];
+        for (int i = 1; i < open_size; i++) open[i - 1] = open[i];
+        open_size--;
 
-    while pq:
-        current = heapq.heappop(pq)
-        visited.add(tuple(current.state))
+        // If goal found
+        if (equal_state(current->state, GOAL_STATE)) {
+            printf("Solution found!\n");
+            reconstruct_path(current);
+            printf("Total moves: %d\n", current->g);
+            return;
+        }
 
-        if current.state == GOAL_STATE:
-            return reconstruct_path(current)
+        visited[visited_size++] = current;
 
-        for neighbor in get_neighbors(current.state):
-            if tuple(neighbor) not in visited:
-                neighbor_node = Node(neighbor, current, current.g + 1)
-                heapq.heappush(pq, neighbor_node)
+        int neighbors[5][N * N];
+        memcpy(neighbors[0], current->state, sizeof(int) * N * N);
+        int count = get_neighbors(neighbors);
 
-    return []  # No solution found
+        for (int i = 1; i <= count; i++) {
+            // Check if visited
+            int already = 0;
+            for (int v = 0; v < visited_size; v++) {
+                if (equal_state(visited[v]->state, neighbors[i])) {
+                    already = 1;
+                    break;
+                }
+            }
+            if (already) continue;
 
-def print_board(state):
-    for i in range(0, N*N, N):
-        row = state[i:i+N]
-        print(' '.join(f'{x:2}' if x != 0 else ' .' for x in row))
-    print()
+            Node *neighbor = (Node *)malloc(sizeof(Node));
+            memcpy(neighbor->state, neighbors[i], sizeof(int) * N * N);
+            neighbor->parent = current;
+            neighbor->g = current->g + 1;
+            neighbor->h = manhattan_distance(neighbor->state);
+            neighbor->f = neighbor->g + neighbor->h;
+            open[open_size++] = neighbor;
+        }
+    }
 
-# Example usage
-if __name__ == "__main__":
-    # A simple test case (takes only a few moves)
-    start_state = [1, 2, 3, 4,
-                   5, 6, 7, 8,
-                   9, 10, 11, 12,
-                   13, 15, 14, 0]  # Simple solvable case
+    printf("No solution found.\n");
+}
 
-    solution_path = solve_15_puzzle(start_state)
+// Main function
+int main() {
+    int start_state[N * N] = {
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+        9,10,11,12,
+        13,15,14,0  // solvable case
+    };
 
-    if solution_path:
-        print(f"Solution found in {len(solution_path) - 1} moves:\n")
-        for step, state in enumerate(solution_path):
-            print(f"Step {step}:")
-            print_board(state)
-    else:
-        print("No solution found.")
+    printf("Solving 15-puzzle...\n");
+    solve_15_puzzle(start_state);
+    return 0;
+}
