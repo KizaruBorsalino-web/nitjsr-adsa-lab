@@ -1,0 +1,226 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+class Student {
+    String rollNumber, name, category;
+    int math, physics, chemistry;
+
+    public Student(String rollNumber, String name, String category) {
+        this.rollNumber = rollNumber;
+        this.name = name;
+        this.category = category;
+        this.math = -1;
+        this.physics = -1;
+        this.chemistry = -1;
+    }
+
+    public int getTotal() {
+        if (math >= 0 && physics >= 0 && chemistry >= 0) {
+            return math + physics + chemistry;
+        }
+        return -1;
+    }
+}
+
+public class JEES {
+    private JFrame frame;
+    private ArrayList<Student> students = new ArrayList<>();
+    private int genCount = 1, resCount = 1;
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new JEES().init());
+    }
+
+    private void init() {
+        frame = new JFrame("JEES - JEE Main Result Processing");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(500, 400);
+
+        JMenuBar menuBar = new JMenuBar();
+        JMenu menu = new JMenu("Menu");
+        JMenuItem regItem = new JMenuItem("Student Registration");
+        JMenuItem marksItem = new JMenuItem("Enter Marks (Admin)");
+        JMenuItem resultItem = new JMenuItem("View Result");
+        JMenuItem meritItem = new JMenuItem("View Merit Serial");
+
+        menu.add(regItem);
+        menu.add(marksItem);
+        menu.add(resultItem);
+        menu.add(meritItem);
+        menuBar.add(menu);
+        frame.setJMenuBar(menuBar);
+
+        regItem.addActionListener(e -> showRegistration());
+        marksItem.addActionListener(e -> showMarksEntry());
+        resultItem.addActionListener(e -> showResultView());
+        meritItem.addActionListener(e -> showMeritSerial());
+
+        frame.setLayout(new BorderLayout());
+        frame.add(new JLabel("Welcome to JEES! Use the menu to navigate."), BorderLayout.CENTER);
+        frame.setVisible(true);
+    }
+
+    // Utility function to assign roll number
+    private String assignRoll(String category) {
+        String roll = "";
+        if (category.equalsIgnoreCase("Gen")) {
+            roll = "GEN" + String.format("%03d", genCount++);
+        } else {
+            roll = "RES" + String.format("%03d", resCount++);
+        }
+        return roll;
+    }
+
+    private void showRegistration() {
+        JPanel panel = new JPanel(new GridLayout(4,2));
+        JTextField nameField = new JTextField();
+        JComboBox<String> catBox = new JComboBox<>(new String[]{"Gen", "Resrv"});
+        JButton submit = new JButton("Register");
+
+        panel.add(new JLabel("Name:"));
+        panel.add(nameField);
+        panel.add(new JLabel("Category:"));
+        panel.add(catBox);
+
+        panel.add(new JLabel(""));
+        panel.add(submit);
+
+        JFrame regFrame = new JFrame("Student Registration");
+        regFrame.setSize(350, 200);
+        regFrame.add(panel);
+        regFrame.setVisible(true);
+
+        submit.addActionListener(e -> {
+            String name = nameField.getText().trim();
+            String cat = catBox.getSelectedItem().toString();
+            if (!name.isEmpty()) {
+                String roll = assignRoll(cat);
+                students.add(new Student(roll, name, cat));
+                JOptionPane.showMessageDialog(regFrame, "Registered! Assigned Roll Number: " + roll);
+                regFrame.dispose();
+            } else {
+                JOptionPane.showMessageDialog(regFrame, "Name cannot be empty!");
+            }
+        });
+    }
+
+    private void showMarksEntry() {
+        JPanel panel = new JPanel(new GridLayout(5,2));
+        JTextField rollField = new JTextField();
+        JTextField mathField = new JTextField();
+        JTextField phyField = new JTextField();
+        JTextField chemField = new JTextField();
+        JButton submit = new JButton("Submit Marks");
+
+        panel.add(new JLabel("Enter Roll Number:"));
+        panel.add(rollField);
+        panel.add(new JLabel("Math Marks:"));
+        panel.add(mathField);
+        panel.add(new JLabel("Physics Marks:"));
+        panel.add(phyField);
+        panel.add(new JLabel("Chemistry Marks:"));
+        panel.add(chemField);
+
+        panel.add(new JLabel(""));
+        panel.add(submit);
+
+        JFrame marksFrame = new JFrame("Marks Entry (Admin)");
+        marksFrame.setSize(350, 250);
+        marksFrame.add(panel);
+        marksFrame.setVisible(true);
+
+        submit.addActionListener(e -> {
+            String roll = rollField.getText().trim();
+            Student s = findStudent(roll);
+            if (s != null) {
+                try {
+                    s.math = Integer.parseInt(mathField.getText());
+                    s.physics = Integer.parseInt(phyField.getText());
+                    s.chemistry = Integer.parseInt(chemField.getText());
+                    JOptionPane.showMessageDialog(marksFrame, "Marks updated successfully!");
+                    marksFrame.dispose();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(marksFrame, "Invalid input for marks!");
+                }
+            } else {
+                JOptionPane.showMessageDialog(marksFrame, "Student not found!");
+            }
+        });
+    }
+
+    private void showResultView() {
+        JPanel panel = new JPanel(new GridLayout(2,2));
+        JTextField rollField = new JTextField();
+        JButton showBtn = new JButton("View Result");
+
+        panel.add(new JLabel("Enter Roll Number:"));
+        panel.add(rollField);
+        panel.add(new JLabel(""));
+        panel.add(showBtn);
+
+        JFrame resultFrame = new JFrame("View Your Result");
+        resultFrame.setSize(300, 150);
+        resultFrame.add(panel);
+        resultFrame.setVisible(true);
+
+        showBtn.addActionListener(e -> {
+            String roll = rollField.getText().trim();
+            Student s = findStudent(roll);
+            if (s != null && s.math >= 0) {
+                JOptionPane.showMessageDialog(resultFrame,
+                        "Name: " + s.name +
+                        "
+Category: " + s.category +
+                        "
+Math: " + s.math +
+                        "
+Physics: " + s.physics +
+                        "
+Chemistry: " + s.chemistry +
+                        "
+Total: " + s.getTotal() +
+                        "
+Roll Number: " + s.rollNumber);
+            } else {
+                JOptionPane.showMessageDialog(resultFrame, "Student not found or marks not entered yet!");
+            }
+        });
+    }
+
+    private void showMeritSerial() {
+        // Only show students whose marks are filled
+        List<Student> eligible = new ArrayList<>();
+        for (Student s : students) {
+            if (s.math >= 0 && s.physics >= 0 && s.chemistry >= 0) eligible.add(s);
+        }
+
+        eligible.sort((s1, s2) -> {
+            int cmp = Integer.compare(s2.getTotal(), s1.getTotal());
+            if (cmp != 0) return cmp;
+            cmp = Integer.compare(s2.math, s1.math);
+            if (cmp != 0) return cmp;
+            return Integer.compare(s2.physics, s1.physics);
+        });
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Merit Serial:
+");
+        for (int i = 0; i < eligible.size(); i++) {
+            Student s = eligible.get(i);
+            sb.append(String.format("%d. %s (%s): Total=%d [Math=%d, Physics=%d, Chemistry=%d]
+",
+                    i + 1, s.name, s.rollNumber, s.getTotal(), s.math, s.physics, s.chemistry));
+        }
+        JOptionPane.showMessageDialog(frame, sb.length() > 14 ? sb.toString() : "No merits to display yet!");
+    }
+
+    private Student findStudent(String roll) {
+        for (Student s : students) {
+            if (s.rollNumber.equalsIgnoreCase(roll))
+                return s;
+        }
+        return null;
+    }
+}
